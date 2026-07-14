@@ -54,18 +54,27 @@ export default function DashboardPage() {
 
       if (companyErr) {
         setCompanies([]);
-      } else if ((companyData ?? []).length === 0 && contractRows.length > 0) {
-        // First-time use: seed the managed company list from whatever already appears in contracts.
-        const names = Array.from(
-          new Set(contractRows.map((c) => c.insurance_company).filter((n): n is string => !!n))
-        );
+        setLoading(false);
+        return;
+      }
+
+      const existing = (companyData as DashboardCompany[]) || [];
+      const existingNames = new Set(existing.map((c) => c.name));
+      // Keep the managed list in sync: any company name that shows up in contracts
+      // but isn't tracked yet gets its own row automatically (new premiums should
+      // always be visible in 현황, not silently folded into 미지정).
+      const missingNames = Array.from(
+        new Set(contractRows.map((c) => c.insurance_company).filter((n): n is string => !!n && !existingNames.has(n)))
+      );
+
+      if (missingNames.length > 0) {
         const { data: inserted, error: seedErr } = await supabase
           .from("cm_dashboard_companies")
-          .insert(names.map((name, i) => ({ name, sort_order: i })))
+          .insert(missingNames.map((name, i) => ({ name, sort_order: existing.length + i })))
           .select();
-        setCompanies(seedErr ? [] : (inserted as DashboardCompany[]) || []);
+        setCompanies(seedErr ? existing : [...existing, ...((inserted as DashboardCompany[]) || [])]);
       } else {
-        setCompanies((companyData as DashboardCompany[]) || []);
+        setCompanies(existing);
       }
       setLoading(false);
     }
@@ -102,6 +111,11 @@ export default function DashboardPage() {
   const metricLabel = metric === "converted_premium" ? "환산보험료" : "월납보험료";
   const companyNames = useMemo(() => companies.map((c) => c.name), [companies]);
 
+  // Managed list drives the row set once it's configured. Until then (table not
+  // migrated yet, or simply empty), fall back to deriving rows straight from
+  // whatever company names already appear in the contracts, so nothing regresses.
+  const hasManagedList = companyNames.length > 0;
+
   const weekly = useMemo(() => {
     const [y, m] = month.split("-").map(Number);
     const daysInMonth = new Date(y, m, 0).getDate();
@@ -109,9 +123,13 @@ export default function DashboardPage() {
     const inMonth = contracts.filter((c) => c.contract_date && c.contract_date.startsWith(month));
 
     const byCompany = new Map<string, number[]>();
-    for (const name of companyNames) byCompany.set(name, new Array(weekCount).fill(0));
+    if (hasManagedList) for (const name of companyNames) byCompany.set(name, new Array(weekCount).fill(0));
     for (const c of inMonth) {
-      const company = c.insurance_company && companyNames.includes(c.insurance_company) ? c.insurance_company : UNMATCHED;
+      const company = hasManagedList
+        ? c.insurance_company && companyNames.includes(c.insurance_company)
+          ? c.insurance_company
+          : UNMATCHED
+        : c.insurance_company || UNMATCHED;
       const day = Number(c.contract_date!.slice(8, 10));
       const week = weekOfMonth(day);
       const val = (c[metric] as number | null) || 0;
@@ -123,6 +141,7 @@ export default function DashboardPage() {
       .filter(([company, weeks]) => companyNames.includes(company) || weeks.some((v) => v !== 0))
       .map(([company, weeks]) => ({ company, weeks, total: weeks.reduce((a, b) => a + b, 0) }))
       .sort((a, b) => {
+        if (!hasManagedList) return b.total - a.total;
         if (a.company === UNMATCHED) return 1;
         if (b.company === UNMATCHED) return -1;
         return companyNames.indexOf(a.company) - companyNames.indexOf(b.company);
@@ -133,14 +152,18 @@ export default function DashboardPage() {
     const grandTotal = weekTotals.reduce((a, b) => a + b, 0);
 
     return { weekCount, rows, weekTotals, grandTotal };
-  }, [contracts, month, metric, companyNames]);
+  }, [contracts, month, metric, companyNames, hasManagedList]);
 
   const monthly = useMemo(() => {
     const inYear = contracts.filter((c) => c.contract_date && c.contract_date.startsWith(String(year)));
     const byCompany = new Map<string, number[]>();
-    for (const name of companyNames) byCompany.set(name, new Array(12).fill(0));
+    if (hasManagedList) for (const name of companyNames) byCompany.set(name, new Array(12).fill(0));
     for (const c of inYear) {
-      const company = c.insurance_company && companyNames.includes(c.insurance_company) ? c.insurance_company : UNMATCHED;
+      const company = hasManagedList
+        ? c.insurance_company && companyNames.includes(c.insurance_company)
+          ? c.insurance_company
+          : UNMATCHED
+        : c.insurance_company || UNMATCHED;
       const mo = Number(c.contract_date!.slice(5, 7));
       const val = (c[metric] as number | null) || 0;
       if (!byCompany.has(company)) byCompany.set(company, new Array(12).fill(0));
@@ -151,6 +174,7 @@ export default function DashboardPage() {
       .filter(([company, months]) => companyNames.includes(company) || months.some((v) => v !== 0))
       .map(([company, months]) => ({ company, months, total: months.reduce((a, b) => a + b, 0) }))
       .sort((a, b) => {
+        if (!hasManagedList) return b.total - a.total;
         if (a.company === UNMATCHED) return 1;
         if (b.company === UNMATCHED) return -1;
         return companyNames.indexOf(a.company) - companyNames.indexOf(b.company);
@@ -161,7 +185,7 @@ export default function DashboardPage() {
     const grandTotal = monthTotals.reduce((a, b) => a + b, 0);
 
     return { rows, monthTotals, grandTotal };
-  }, [contracts, year, metric, companyNames]);
+  }, [contracts, year, metric, companyNames, hasManagedList]);
 
   if (loading) return <div className="p-6 text-foreground/60">불러오는 중...</div>;
   if (error) return <div className="p-6 text-red-500">{error}</div>;

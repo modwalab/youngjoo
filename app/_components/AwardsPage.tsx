@@ -16,11 +16,48 @@ function publicUrl(path: string) {
   return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
+function fileExt(name: string) {
+  return name.split(".").pop()?.toLowerCase() || "";
+}
+
+const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"]);
+
+function isImageFile(name: string) {
+  return IMAGE_EXTS.has(fileExt(name));
+}
+
+function fileIcon(name: string) {
+  const ext = fileExt(name);
+  if (ext === "pdf") return "📕";
+  if (["doc", "docx", "hwp"].includes(ext)) return "📘";
+  if (["xls", "xlsx", "csv"].includes(ext)) return "📗";
+  if (["ppt", "pptx"].includes(ext)) return "📙";
+  if (["zip", "rar", "7z"].includes(ext)) return "🗜️";
+  return "📄";
+}
+
+function generateMonthRange(startYM: string, endYM: string) {
+  const result: string[] = [];
+  let [y, m] = startYM.split("-").map(Number);
+  const [ey, em] = endYM.split("-").map(Number);
+  while (y < ey || (y === ey && m <= em)) {
+    result.push(`${y}-${String(m).padStart(2, "0")}`);
+    m++;
+    if (m > 12) {
+      m = 1;
+      y++;
+    }
+  }
+  return result;
+}
+
+const DEFAULT_MONTHS = generateMonthRange("2025-07", "2026-07");
+
 export default function AwardsPage() {
   const [files, setFiles] = useState<AwardFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(DEFAULT_MONTHS[DEFAULT_MONTHS.length - 1]);
   const [extraMonths, setExtraMonths] = useState<string[]>([]);
   const [showAddMonth, setShowAddMonth] = useState(false);
   const [newMonth, setNewMonth] = useState("");
@@ -54,6 +91,7 @@ export default function AwardsPage() {
 
   const months = useMemo(() => {
     const set = new Set<string>();
+    for (const m of DEFAULT_MONTHS) set.add(m);
     for (const f of files) set.add(f.month);
     for (const m of extraMonths) set.add(m);
     return Array.from(set).sort((a, b) => b.localeCompare(a));
@@ -101,7 +139,7 @@ export default function AwardsPage() {
 
   async function handleDelete(f: AwardFile) {
     if (!supabase) return;
-    if (!confirm("이 이미지를 삭제하시겠습니까?")) return;
+    if (!confirm("이 파일을 삭제하시겠습니까?")) return;
     await supabase.storage.from(BUCKET).remove([f.storage_path]);
     const { error } = await supabase.from("cm_award_files").delete().eq("id", f.id);
     if (error) {
@@ -161,7 +199,6 @@ export default function AwardsPage() {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
               multiple
               onChange={handleUpload}
               className="hidden"
@@ -173,7 +210,7 @@ export default function AwardsPage() {
                 !selectedMonth || uploading ? "pointer-events-none opacity-50" : ""
               }`}
             >
-              {uploading ? "업로드 중..." : "+ 이미지 업로드"}
+              {uploading ? "업로드 중..." : "+ 파일 업로드"}
             </label>
           </div>
         </div>
@@ -184,32 +221,56 @@ export default function AwardsPage() {
           </div>
         ) : currentFiles.length === 0 ? (
           <div className="rounded-xl border border-primary/20 bg-panel p-10 text-center text-foreground/40">
-            이 달의 시상 이미지가 없습니다.
+            이 달의 파일이 없습니다.
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {currentFiles.map((f) => (
-              <div
-                key={f.id}
-                className="group relative overflow-hidden rounded-xl border border-primary/20 bg-surface shadow-sm"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={publicUrl(f.storage_path)}
-                  alt={f.file_name}
-                  onClick={() => setLightbox(f)}
-                  className="aspect-square w-full cursor-pointer object-cover"
-                />
-                <button
-                  onClick={() => handleDelete(f)}
-                  className="absolute right-1.5 top-1.5 hidden h-6 w-6 items-center justify-center rounded-full bg-black/60 text-xs text-white hover:bg-red-500 group-hover:flex"
-                  title="삭제"
+            {currentFiles.map((f) =>
+              isImageFile(f.file_name) ? (
+                <div
+                  key={f.id}
+                  className="group relative overflow-hidden rounded-xl border border-primary/20 bg-surface shadow-sm"
                 >
-                  ✕
-                </button>
-                <p className="truncate px-2 py-1.5 text-xs text-foreground/60">{f.file_name}</p>
-              </div>
-            ))}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={publicUrl(f.storage_path)}
+                    alt={f.file_name}
+                    onClick={() => setLightbox(f)}
+                    className="aspect-square w-full cursor-pointer object-cover"
+                  />
+                  <button
+                    onClick={() => handleDelete(f)}
+                    className="absolute right-1.5 top-1.5 hidden h-6 w-6 items-center justify-center rounded-full bg-black/60 text-xs text-white hover:bg-red-500 group-hover:flex"
+                    title="삭제"
+                  >
+                    ✕
+                  </button>
+                  <p className="truncate px-2 py-1.5 text-xs text-foreground/60">{f.file_name}</p>
+                </div>
+              ) : (
+                <a
+                  key={f.id}
+                  href={publicUrl(f.storage_path)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group relative flex aspect-square flex-col items-center justify-center overflow-hidden rounded-xl border border-primary/20 bg-surface p-3 text-center shadow-sm hover:bg-primary-light/40"
+                >
+                  <span className="text-4xl">{fileIcon(f.file_name)}</span>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleDelete(f);
+                    }}
+                    className="absolute right-1.5 top-1.5 hidden h-6 w-6 items-center justify-center rounded-full bg-black/60 text-xs text-white hover:bg-red-500 group-hover:flex"
+                    title="삭제"
+                  >
+                    ✕
+                  </button>
+                  <p className="mt-2 line-clamp-2 break-all px-1 text-xs text-foreground/70">{f.file_name}</p>
+                </a>
+              )
+            )}
           </div>
         )}
       </div>

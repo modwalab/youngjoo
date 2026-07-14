@@ -220,7 +220,7 @@ export default function DashboardPage() {
             type="month"
             value={month}
             onChange={(e) => setMonth(e.target.value)}
-            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium text-foreground shadow-sm outline-none transition-colors hover:border-primary/50 focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
         </div>
         <div className="overflow-x-auto rounded-xl border border-primary/20 bg-panel shadow-sm">
@@ -258,14 +258,14 @@ export default function DashboardPage() {
             </tbody>
             {weekly.rows.length > 0 && (
               <tfoot>
-                <tr className="border-t-2 border-accent bg-primary-light/60 font-semibold">
-                  <td className="px-3 py-2 text-foreground">합계</td>
+                <tr className="bg-primary font-semibold text-primary-foreground">
+                  <td className="px-3 py-2">합계</td>
                   {weekly.weekTotals.map((v, i) => (
-                    <td key={i} className="whitespace-nowrap px-3 py-2 text-right text-foreground">
+                    <td key={i} className="whitespace-nowrap px-3 py-2 text-right">
                       {formatWon(v)}
                     </td>
                   ))}
-                  <td className="whitespace-nowrap rounded-br-xl bg-accent px-3 py-2 text-right text-accent-foreground">{formatWon(weekly.grandTotal)}</td>
+                  <td className="whitespace-nowrap rounded-br-xl bg-primary-hover px-3 py-2 text-right">{formatWon(weekly.grandTotal)}</td>
                 </tr>
               </tfoot>
             )}
@@ -318,14 +318,14 @@ export default function DashboardPage() {
             </tbody>
             {monthly.rows.length > 0 && (
               <tfoot>
-                <tr className="border-t-2 border-accent bg-primary-light/60 font-semibold">
-                  <td className="px-3 py-2 text-foreground">합계</td>
+                <tr className="bg-primary font-semibold text-primary-foreground">
+                  <td className="px-3 py-2">합계</td>
                   {monthly.monthTotals.map((v, i) => (
-                    <td key={i} className="whitespace-nowrap px-3 py-2 text-right text-foreground">
+                    <td key={i} className="whitespace-nowrap px-3 py-2 text-right">
                       {formatWon(v)}
                     </td>
                   ))}
-                  <td className="whitespace-nowrap rounded-br-xl bg-accent px-3 py-2 text-right text-accent-foreground">{formatWon(monthly.grandTotal)}</td>
+                  <td className="whitespace-nowrap rounded-br-xl bg-primary-hover px-3 py-2 text-right">{formatWon(monthly.grandTotal)}</td>
                 </tr>
               </tfoot>
             )}

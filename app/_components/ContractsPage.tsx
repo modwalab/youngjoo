@@ -499,8 +499,8 @@ export default function ContractsPage() {
         </div>
 
         {selectedIds.size > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-accent bg-accent/10 px-3 py-2">
-            <span className="text-sm font-medium text-accent-foreground">{selectedIds.size}개 선택됨</span>
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-primary bg-primary-light px-3 py-2">
+            <span className="text-sm font-medium text-primary">{selectedIds.size}개 선택됨</span>
             <select
               value={moveTarget}
               onChange={(e) => setMoveTarget(e.target.value)}
@@ -535,7 +535,7 @@ export default function ContractsPage() {
             <thead>
               <tr className="bg-primary text-left text-primary-foreground">
                 <th className="w-8 px-3 py-2.5">
-                  <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll} className="accent-accent" />
+                  <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll} className="accent-white" />
                 </th>
                 {FIXED_FIELDS.map((f) =>
                   SORTABLE_KEYS.has(f.key) ? (
@@ -545,7 +545,7 @@ export default function ContractsPage() {
                       className="cursor-pointer select-none whitespace-nowrap px-3 py-2.5 font-semibold hover:bg-white/10"
                     >
                       {f.label}
-                      <span className="ml-0.5 inline-block w-3 text-accent">
+                      <span className="ml-0.5 inline-block w-3">
                         {sortKey === f.key ? (sortDir === "asc" ? "▲" : "▼") : ""}
                       </span>
                     </th>

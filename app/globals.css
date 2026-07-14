@@ -8,8 +8,6 @@
   --primary-light: #ede9fe;
   --primary-foreground: #ffffff;
   --panel: #f4eefd;
-  --accent: #eab308;
-  --accent-foreground: #422b00;
   --border: #e4e0ee;
   --surface: #ffffff;
 }
@@ -22,8 +20,6 @@
   --color-primary-light: var(--primary-light);
   --color-primary-foreground: var(--primary-foreground);
   --color-panel: var(--panel);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
   --color-border: var(--border);
   --color-surface: var(--surface);
   --font-sans: var(--font-geist-sans);
@@ -39,8 +35,6 @@
     --primary-light: #2e1f4d;
     --primary-foreground: #1c1330;
     --panel: #241a3d;
-    --accent: #facc15;
-    --accent-foreground: #422b00;
     --border: #322a4a;
     --surface: #1e1832;
   }
@@ -50,4 +44,31 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+input[type="month"],
+input[type="date"] {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  input[type="month"],
+  input[type="date"] {
+    color-scheme: dark;
+  }
+}
+
+input[type="month"]::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 3px;
+  margin-left: 4px;
+  filter: invert(24%) sepia(94%) saturate(1957%) hue-rotate(255deg) brightness(93%) contrast(92%);
+  transition: background-color 0.15s ease;
+}
+
+input[type="month"]::-webkit-calendar-picker-indicator:hover,
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  background-color: var(--primary-light);
 }

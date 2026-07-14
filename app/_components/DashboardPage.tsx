@@ -115,7 +115,7 @@ export default function DashboardPage() {
 
       <section>
         <div className="mb-3 flex items-center gap-3">
-          <h2 className="text-lg font-bold text-primary">주간 현황 ({metricLabel} 보험사별 합산)</h2>
+          <h2 className="text-lg font-bold text-foreground">주간 현황 ({metricLabel} 보험사별 합산)</h2>
           <input
             type="month"
             value={month}
@@ -175,7 +175,7 @@ export default function DashboardPage() {
 
       <section>
         <div className="mb-3 flex items-center gap-3">
-          <h2 className="text-lg font-bold text-primary">월간 현황 ({metricLabel} 보험사별 합산)</h2>
+          <h2 className="text-lg font-bold text-foreground">월간 현황 ({metricLabel} 보험사별 합산)</h2>
           <input
             type="number"
             value={year}

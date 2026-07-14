@@ -41,7 +41,7 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-sm p-6">
-      <h2 className="mb-6 text-lg font-bold text-primary">비밀번호 변경</h2>
+      <h2 className="mb-6 text-lg font-bold text-foreground">비밀번호 변경</h2>
       <form onSubmit={handleSubmit} className="rounded-2xl border border-border bg-surface p-6 shadow-sm">
         <label className="mb-1 block text-sm text-foreground/70">현재 비밀번호</label>
         <input

@@ -345,7 +345,7 @@ export default function ContractsPage() {
             onClick={(e) => e.stopPropagation()}
             className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-surface p-6 shadow-xl"
           >
-            <h3 className="mb-4 text-lg font-bold text-primary">{editingId ? "계약 수정" : "계약 추가"}</h3>
+            <h3 className="mb-4 text-lg font-bold text-foreground">{editingId ? "계약 수정" : "계약 추가"}</h3>
             <div className="grid grid-cols-2 gap-3">
               {FIXED_FIELDS.map((f) => (
                 <div key={f.key} className={f.key === "memo" ? "col-span-2" : ""}>
@@ -393,7 +393,7 @@ export default function ContractsPage() {
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-sm rounded-2xl border border-border bg-surface p-6 shadow-xl"
           >
-            <h3 className="mb-4 text-lg font-bold text-primary">항목 관리</h3>
+            <h3 className="mb-4 text-lg font-bold text-foreground">항목 관리</h3>
             <ul className="mb-4 space-y-2">
               {customFields.length === 0 && <li className="text-sm text-foreground/40">추가 항목이 없습니다.</li>}
               {customFields.map((f) => (

@@ -77,6 +77,7 @@ export default function ContractsPage() {
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [moveTarget, setMoveTarget] = useState("");
+  const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
 
   function toggleSort(key: keyof Contract) {
     if (sortKey === key) {
@@ -146,6 +147,10 @@ export default function ContractsPage() {
     return arr;
   }, [filtered, sortKey, sortDir]);
 
+  useEffect(() => {
+    setLastCheckedIndex(null);
+  }, [selectedFolder, companyFilter, monthFilter, search, sortKey, sortDir]);
+
   const allVisibleSelected = sorted.length > 0 && sorted.every((c) => selectedIds.has(c.id));
 
   function toggleSelectAll() {
@@ -168,6 +173,21 @@ export default function ContractsPage() {
       else next.add(id);
       return next;
     });
+  }
+
+  function handleCheckboxClick(e: React.MouseEvent<HTMLInputElement>, id: string, index: number) {
+    if (e.shiftKey && lastCheckedIndex !== null) {
+      const [start, end] = index < lastCheckedIndex ? [index, lastCheckedIndex] : [lastCheckedIndex, index];
+      const rangeIds = sorted.slice(start, end + 1).map((c) => c.id);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const rid of rangeIds) next.add(rid);
+        return next;
+      });
+    } else {
+      toggleSelectOne(id);
+    }
+    setLastCheckedIndex(index);
   }
 
   function openNew() {
@@ -551,7 +571,7 @@ export default function ContractsPage() {
                   </td>
                 </tr>
               )}
-              {sorted.map((c) => (
+              {sorted.map((c, i) => (
                 <tr
                   key={c.id}
                   onClick={() => openEdit(c)}
@@ -561,8 +581,10 @@ export default function ContractsPage() {
                     <input
                       type="checkbox"
                       checked={selectedIds.has(c.id)}
-                      onChange={() => toggleSelectOne(c.id)}
+                      onChange={() => {}}
+                      onClick={(e) => handleCheckboxClick(e, c.id, i)}
                       className="accent-primary"
+                      title="Shift+클릭으로 범위 선택"
                     />
                   </td>
                   {FIXED_FIELDS.map((f) => (

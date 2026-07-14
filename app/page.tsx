@@ -29,22 +29,22 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="flex items-center gap-1 border-b border-border bg-surface px-4 py-3 sm:px-6">
-        <h1 className="mr-4 text-lg font-bold text-primary">계약관리</h1>
+      <header className="flex items-center gap-1 bg-primary px-4 py-3 text-primary-foreground shadow-sm sm:px-6">
+        <h1 className="mr-4 text-lg font-bold text-primary-foreground">계약관리</h1>
         <nav className="flex gap-1">
           {tabs.map((t) => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                tab === t.key ? "bg-primary text-white" : "text-foreground/70 hover:bg-primary-light"
+                tab === t.key ? "bg-white/25 text-white" : "text-white/70 hover:bg-white/10 hover:text-white"
               }`}
             >
               {t.label}
             </button>
           ))}
         </nav>
-        <button onClick={logout} className="ml-auto text-sm text-foreground/50 hover:text-foreground">
+        <button onClick={logout} className="ml-auto text-sm text-white/70 hover:text-white">
           로그아웃
         </button>
       </header>

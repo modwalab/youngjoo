@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../_utils/supabase";
-import { Contract, CustomFieldDef, FIXED_FIELDS } from "../_utils/types";
+import { Contract, CustomFieldDef, Folder, FIXED_FIELDS } from "../_utils/types";
 
 type FormState = Record<string, string>;
+
+const UNASSIGNED = "__unassigned__";
 
 function emptyForm(): FormState {
   const f: FormState = {};
@@ -54,6 +56,7 @@ function compareValues(a: Contract, b: Contract, key: keyof Contract) {
 export default function ContractsPage() {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [customFields, setCustomFields] = useState<CustomFieldDef[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -71,6 +74,10 @@ export default function ContractsPage() {
   const [sortKey, setSortKey] = useState<keyof Contract | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [moveTarget, setMoveTarget] = useState("");
+
   function toggleSort(key: keyof Contract) {
     if (sortKey === key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -87,15 +94,22 @@ export default function ContractsPage() {
       return;
     }
     setLoading(true);
-    const [{ data: contractData, error: contractErr }, { data: fieldData, error: fieldErr }] = await Promise.all([
+    const [
+      { data: contractData, error: contractErr },
+      { data: fieldData, error: fieldErr },
+      { data: folderData, error: folderErr },
+    ] = await Promise.all([
       supabase.from("cm_contracts").select("*").order("contract_date", { ascending: false }),
       supabase.from("cm_custom_fields").select("*").order("sort_order", { ascending: true }),
+      supabase.from("cm_folders").select("*").order("sort_order", { ascending: true }),
     ]);
     if (contractErr) setError(contractErr.message);
     else if (fieldErr) setError(fieldErr.message);
     else {
       setContracts((contractData as Contract[]) || []);
       setCustomFields((fieldData as CustomFieldDef[]) || []);
+      // cm_folders may not exist yet until the folder-feature SQL migration is run; degrade gracefully.
+      setFolders(folderErr ? [] : (folderData as Folder[]) || []);
     }
     setLoading(false);
   }
@@ -112,6 +126,8 @@ export default function ContractsPage() {
 
   const filtered = useMemo(() => {
     return contracts.filter((c) => {
+      if (selectedFolder === UNASSIGNED && c.folder_id) return false;
+      if (selectedFolder && selectedFolder !== UNASSIGNED && c.folder_id !== selectedFolder) return false;
       if (companyFilter && c.insurance_company !== companyFilter) return false;
       if (monthFilter && (!c.contract_date || !c.contract_date.startsWith(monthFilter))) return false;
       if (search) {
@@ -121,7 +137,7 @@ export default function ContractsPage() {
       }
       return true;
     });
-  }, [contracts, companyFilter, monthFilter, search]);
+  }, [contracts, selectedFolder, companyFilter, monthFilter, search]);
 
   const sorted = useMemo(() => {
     if (!sortKey) return filtered;
@@ -129,6 +145,30 @@ export default function ContractsPage() {
     arr.sort((a, b) => compareValues(a, b, sortKey) * (sortDir === "asc" ? 1 : -1));
     return arr;
   }, [filtered, sortKey, sortDir]);
+
+  const allVisibleSelected = sorted.length > 0 && sorted.every((c) => selectedIds.has(c.id));
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => {
+      if (allVisibleSelected) {
+        const next = new Set(prev);
+        for (const c of sorted) next.delete(c.id);
+        return next;
+      }
+      const next = new Set(prev);
+      for (const c of sorted) next.add(c.id);
+      return next;
+    });
+  }
+
+  function toggleSelectOne(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   function openNew() {
     setEditingId(null);
@@ -151,6 +191,11 @@ export default function ContractsPage() {
       return;
     }
     setContracts((prev) => prev.filter((c) => c.id !== id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -228,114 +273,261 @@ export default function ContractsPage() {
     setCustomFields((prev) => prev.filter((f) => f.id !== id));
   }
 
+  async function handleAddFolder() {
+    if (!supabase) return;
+    const name = prompt("새 폴더 이름을 입력하세요");
+    if (!name || !name.trim()) return;
+    const { data, error } = await supabase
+      .from("cm_folders")
+      .insert({ name: name.trim(), sort_order: folders.length })
+      .select()
+      .single();
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    setFolders((prev) => [...prev, data as Folder]);
+  }
+
+  async function handleDeleteFolder(id: string) {
+    if (!supabase) return;
+    if (!confirm("이 폴더를 삭제하시겠습니까? (폴더 안의 계약은 미분류로 이동합니다)")) return;
+    const { error } = await supabase.from("cm_folders").delete().eq("id", id);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    setFolders((prev) => prev.filter((f) => f.id !== id));
+    setContracts((prev) => prev.map((c) => (c.folder_id === id ? { ...c, folder_id: null } : c)));
+    if (selectedFolder === id) setSelectedFolder(null);
+  }
+
+  async function handleMoveSelected() {
+    if (!supabase || selectedIds.size === 0) return;
+    const targetId = moveTarget === UNASSIGNED || moveTarget === "" ? null : moveTarget;
+    const ids = Array.from(selectedIds);
+    const { error } = await supabase.from("cm_contracts").update({ folder_id: targetId }).in("id", ids);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    setContracts((prev) => prev.map((c) => (selectedIds.has(c.id) ? { ...c, folder_id: targetId } : c)));
+    setSelectedIds(new Set());
+    setMoveTarget("");
+  }
+
   if (loading) return <div className="p-6 text-foreground/60">불러오는 중...</div>;
   if (error) return <div className="p-6 text-red-500">{error}</div>;
 
+  const gridFields = FIXED_FIELDS.filter((f) => f.key !== "customer_name");
+
   return (
-    <div className="p-4 sm:p-6">
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="고객명/상품명/비고 검색"
-          className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-primary"
-        />
-        <select
-          value={companyFilter}
-          onChange={(e) => setCompanyFilter(e.target.value)}
-          className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-primary"
-        >
-          <option value="">전체 보험사</option>
-          {companies.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        <input
-          type="month"
-          value={monthFilter}
-          onChange={(e) => setMonthFilter(e.target.value)}
-          className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-primary"
-        />
-        <div className="ml-auto flex gap-2">
-          <button
-            onClick={() => setShowFieldManager(true)}
-            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground hover:bg-primary-light"
-          >
-            항목 관리
-          </button>
-          <button
-            onClick={openNew}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover"
-          >
-            + 계약 추가
+    <div className="flex gap-4 p-4 sm:p-6">
+      <aside className="w-40 flex-shrink-0 sm:w-48">
+        <div className="mb-2 flex items-center justify-between px-1">
+          <span className="text-xs font-semibold text-foreground/50">폴더</span>
+          <button onClick={handleAddFolder} className="text-xs font-medium text-primary hover:underline">
+            + 추가
           </button>
         </div>
-      </div>
+        <ul className="space-y-0.5">
+          <li>
+            <button
+              onClick={() => setSelectedFolder(null)}
+              className={`w-full rounded-lg px-2.5 py-1.5 text-left text-sm ${
+                selectedFolder === null ? "bg-primary text-primary-foreground font-semibold" : "text-foreground hover:bg-primary-light"
+              }`}
+            >
+              전체
+            </button>
+          </li>
+          <li>
+            <button
+              onClick={() => setSelectedFolder(UNASSIGNED)}
+              className={`w-full rounded-lg px-2.5 py-1.5 text-left text-sm ${
+                selectedFolder === UNASSIGNED ? "bg-primary text-primary-foreground font-semibold" : "text-foreground hover:bg-primary-light"
+              }`}
+            >
+              미분류
+            </button>
+          </li>
+          {folders.map((f) => (
+            <li key={f.id} className="group flex items-center">
+              <button
+                onClick={() => setSelectedFolder(f.id)}
+                className={`min-w-0 flex-1 truncate rounded-lg px-2.5 py-1.5 text-left text-sm ${
+                  selectedFolder === f.id ? "bg-primary text-primary-foreground font-semibold" : "text-foreground hover:bg-primary-light"
+                }`}
+              >
+                {f.name}
+              </button>
+              <button
+                onClick={() => handleDeleteFolder(f.id)}
+                className="ml-1 hidden shrink-0 px-1 text-xs text-foreground/30 hover:text-red-500 group-hover:inline"
+                title="폴더 삭제"
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      </aside>
 
-      <div className="overflow-x-auto rounded-xl border border-primary/20 bg-panel shadow-sm">
-        <table className="w-full min-w-[900px] text-sm">
-          <thead>
-            <tr className="bg-primary text-left text-primary-foreground">
-              {FIXED_FIELDS.map((f) =>
-                SORTABLE_KEYS.has(f.key) ? (
-                  <th
-                    key={f.key}
-                    onClick={() => toggleSort(f.key)}
-                    className="cursor-pointer select-none whitespace-nowrap px-3 py-2.5 font-semibold hover:bg-white/10"
-                  >
-                    {f.label}
-                    <span className="ml-0.5 inline-block w-3 text-accent">
-                      {sortKey === f.key ? (sortDir === "asc" ? "▲" : "▼") : ""}
-                    </span>
-                  </th>
-                ) : (
-                  <th key={f.key} className="whitespace-nowrap px-3 py-2.5 font-semibold">
-                    {f.label}
-                  </th>
-                )
-              )}
-              {customFields.map((f) => (
-                <th key={f.id} className="whitespace-nowrap px-3 py-2.5 font-semibold">
-                  {f.label}
-                </th>
-              ))}
-              <th className="px-3 py-2.5"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.length === 0 && (
-              <tr>
-                <td colSpan={FIXED_FIELDS.length + customFields.length + 1} className="px-3 py-8 text-center text-foreground/40">
-                  계약 데이터가 없습니다.
-                </td>
-              </tr>
-            )}
-            {sorted.map((c) => (
-              <tr key={c.id} className="border-b border-primary/10 bg-surface last:border-0 hover:bg-primary-light/50">
-                {FIXED_FIELDS.map((f) => (
-                  <td key={f.key} className="whitespace-nowrap px-3 py-2 text-foreground">
-                    {f.type === "number" ? formatNumber(c[f.key] as number | null) : (c[f.key] as string) || ""}
-                  </td>
-                ))}
-                {customFields.map((f) => (
-                  <td key={f.id} className="whitespace-nowrap px-3 py-2 text-foreground">
-                    {c.extra?.[f.field_key] || ""}
-                  </td>
-                ))}
-                <td className="whitespace-nowrap px-3 py-2 text-right">
-                  <button onClick={() => openEdit(c)} className="mr-2 text-primary hover:underline">
-                    수정
-                  </button>
-                  <button onClick={() => handleDelete(c.id)} className="text-red-500 hover:underline">
-                    삭제
-                  </button>
-                </td>
-              </tr>
+      <div className="min-w-0 flex-1">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="고객명/상품명/비고 검색"
+            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-primary"
+          />
+          <select
+            value={companyFilter}
+            onChange={(e) => setCompanyFilter(e.target.value)}
+            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-primary"
+          >
+            <option value="">전체 보험사</option>
+            {companies.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
             ))}
-          </tbody>
-        </table>
+          </select>
+          <input
+            type="month"
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(e.target.value)}
+            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-primary"
+          />
+          <div className="ml-auto flex gap-2">
+            <button
+              onClick={() => setShowFieldManager(true)}
+              className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground hover:bg-primary-light"
+            >
+              항목 관리
+            </button>
+            <button
+              onClick={openNew}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover"
+            >
+              + 계약 추가
+            </button>
+          </div>
+        </div>
+
+        {selectedIds.size > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-accent bg-accent/10 px-3 py-2">
+            <span className="text-sm font-medium text-accent-foreground">{selectedIds.size}개 선택됨</span>
+            <select
+              value={moveTarget}
+              onChange={(e) => setMoveTarget(e.target.value)}
+              className="rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+            >
+              <option value="">이동할 폴더 선택</option>
+              <option value={UNASSIGNED}>미분류</option>
+              {folders.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleMoveSelected}
+              disabled={!moveTarget}
+              className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-hover disabled:opacity-50"
+            >
+              이동
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="ml-auto text-sm text-foreground/50 hover:text-foreground"
+            >
+              선택 해제
+            </button>
+          </div>
+        )}
+
+        <div className="overflow-x-auto rounded-xl border border-primary/20 bg-panel shadow-sm">
+          <table className="w-full min-w-[900px] text-sm">
+            <thead>
+              <tr className="bg-primary text-left text-primary-foreground">
+                <th className="w-8 px-3 py-2.5">
+                  <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll} className="accent-accent" />
+                </th>
+                {FIXED_FIELDS.map((f) =>
+                  SORTABLE_KEYS.has(f.key) ? (
+                    <th
+                      key={f.key}
+                      onClick={() => toggleSort(f.key)}
+                      className="cursor-pointer select-none whitespace-nowrap px-3 py-2.5 font-semibold hover:bg-white/10"
+                    >
+                      {f.label}
+                      <span className="ml-0.5 inline-block w-3 text-accent">
+                        {sortKey === f.key ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                      </span>
+                    </th>
+                  ) : (
+                    <th key={f.key} className="whitespace-nowrap px-3 py-2.5 font-semibold">
+                      {f.label}
+                    </th>
+                  )
+                )}
+                {customFields.map((f) => (
+                  <th key={f.id} className="whitespace-nowrap px-3 py-2.5 font-semibold">
+                    {f.label}
+                  </th>
+                ))}
+                <th className="px-3 py-2.5"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.length === 0 && (
+                <tr>
+                  <td colSpan={FIXED_FIELDS.length + customFields.length + 2} className="px-3 py-8 text-center text-foreground/40">
+                    계약 데이터가 없습니다.
+                  </td>
+                </tr>
+              )}
+              {sorted.map((c) => (
+                <tr
+                  key={c.id}
+                  onClick={() => openEdit(c)}
+                  className="cursor-pointer border-b border-primary/10 bg-surface last:border-0 hover:bg-primary-light/50"
+                >
+                  <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(c.id)}
+                      onChange={() => toggleSelectOne(c.id)}
+                      className="accent-primary"
+                    />
+                  </td>
+                  {FIXED_FIELDS.map((f) => (
+                    <td key={f.key} className="whitespace-nowrap px-3 py-2 text-foreground">
+                      {f.type === "number" ? formatNumber(c[f.key] as number | null) : (c[f.key] as string) || ""}
+                    </td>
+                  ))}
+                  {customFields.map((f) => (
+                    <td key={f.id} className="whitespace-nowrap px-3 py-2 text-foreground">
+                      {c.extra?.[f.field_key] || ""}
+                    </td>
+                  ))}
+                  <td className="whitespace-nowrap px-3 py-2 text-right">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(c.id);
+                      }}
+                      className="text-red-500 hover:underline"
+                    >
+                      삭제
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {showForm && (
@@ -345,9 +537,14 @@ export default function ContractsPage() {
             onClick={(e) => e.stopPropagation()}
             className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-surface p-6 shadow-xl"
           >
-            <h3 className="mb-4 text-lg font-bold text-foreground">{editingId ? "계약 수정" : "계약 추가"}</h3>
+            <input
+              value={form.customer_name ?? ""}
+              onChange={(e) => setForm((prev) => ({ ...prev, customer_name: e.target.value }))}
+              placeholder="고객명"
+              className="mb-4 w-full border-b-2 border-primary/30 bg-transparent pb-2 text-xl font-bold text-primary outline-none focus:border-primary"
+            />
             <div className="grid grid-cols-2 gap-3">
-              {FIXED_FIELDS.map((f) => (
+              {gridFields.map((f) => (
                 <div key={f.key} className={f.key === "memo" ? "col-span-2" : ""}>
                   <label className="mb-1 block text-xs text-foreground/60">{f.label}</label>
                   <input

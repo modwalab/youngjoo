@@ -10,6 +10,7 @@ export type Contract = {
   design_number: string | null;
   memo: string | null;
   extra: Record<string, string>;
+  folder_id: string | null;
   created_at?: string;
 };
 
@@ -20,8 +21,14 @@ export type CustomFieldDef = {
   sort_order: number;
 };
 
+export type Folder = {
+  id: string;
+  name: string;
+  sort_order: number;
+};
+
 export type FixedFieldDef = {
-  key: keyof Omit<Contract, "id" | "extra" | "created_at">;
+  key: keyof Omit<Contract, "id" | "extra" | "created_at" | "folder_id">;
   label: string;
   type: "date" | "text" | "number";
 };

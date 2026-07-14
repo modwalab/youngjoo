@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../_utils/supabase";
-import { Contract } from "../_utils/types";
+import { Contract, DashboardCompany } from "../_utils/types";
 
 type Metric = "converted_premium" | "monthly_premium";
+
+const UNMATCHED = "미지정";
 
 function todayMonthStr() {
   const d = new Date();
@@ -21,11 +23,15 @@ function formatWon(n: number) {
 
 export default function DashboardPage() {
   const [contracts, setContracts] = useState<Contract[]>([]);
+  const [companies, setCompanies] = useState<DashboardCompany[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [metric, setMetric] = useState<Metric>("converted_premium");
   const [month, setMonth] = useState(todayMonthStr());
   const [year, setYear] = useState(new Date().getFullYear());
+
+  const [showManager, setShowManager] = useState(false);
+  const [newCompanyName, setNewCompanyName] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -34,15 +40,67 @@ export default function DashboardPage() {
         setLoading(false);
         return;
       }
-      const { data, error } = await supabase.from("cm_contracts").select("*");
-      if (error) setError(error.message);
-      else setContracts((data as Contract[]) || []);
+      const [{ data: contractData, error: contractErr }, { data: companyData, error: companyErr }] = await Promise.all([
+        supabase.from("cm_contracts").select("*"),
+        supabase.from("cm_dashboard_companies").select("*").order("sort_order", { ascending: true }),
+      ]);
+      if (contractErr) {
+        setError(contractErr.message);
+        setLoading(false);
+        return;
+      }
+      const contractRows = (contractData as Contract[]) || [];
+      setContracts(contractRows);
+
+      if (companyErr) {
+        setCompanies([]);
+      } else if ((companyData ?? []).length === 0 && contractRows.length > 0) {
+        // First-time use: seed the managed company list from whatever already appears in contracts.
+        const names = Array.from(
+          new Set(contractRows.map((c) => c.insurance_company).filter((n): n is string => !!n))
+        );
+        const { data: inserted, error: seedErr } = await supabase
+          .from("cm_dashboard_companies")
+          .insert(names.map((name, i) => ({ name, sort_order: i })))
+          .select();
+        setCompanies(seedErr ? [] : (inserted as DashboardCompany[]) || []);
+      } else {
+        setCompanies((companyData as DashboardCompany[]) || []);
+      }
       setLoading(false);
     }
     load();
   }, []);
 
+  async function handleAddCompany(e: React.FormEvent) {
+    e.preventDefault();
+    if (!supabase || !newCompanyName.trim()) return;
+    const { data, error } = await supabase
+      .from("cm_dashboard_companies")
+      .insert({ name: newCompanyName.trim(), sort_order: companies.length })
+      .select()
+      .single();
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    setCompanies((prev) => [...prev, data as DashboardCompany]);
+    setNewCompanyName("");
+  }
+
+  async function handleRemoveCompany(id: string) {
+    if (!supabase) return;
+    if (!confirm("이 보험사를 현황에서 제거하시겠습니까? (계약 데이터 자체는 삭제되지 않습니다)")) return;
+    const { error } = await supabase.from("cm_dashboard_companies").delete().eq("id", id);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    setCompanies((prev) => prev.filter((c) => c.id !== id));
+  }
+
   const metricLabel = metric === "converted_premium" ? "환산보험료" : "월납보험료";
+  const companyNames = useMemo(() => companies.map((c) => c.name), [companies]);
 
   const weekly = useMemo(() => {
     const [y, m] = month.split("-").map(Number);
@@ -51,8 +109,9 @@ export default function DashboardPage() {
     const inMonth = contracts.filter((c) => c.contract_date && c.contract_date.startsWith(month));
 
     const byCompany = new Map<string, number[]>();
+    for (const name of companyNames) byCompany.set(name, new Array(weekCount).fill(0));
     for (const c of inMonth) {
-      const company = c.insurance_company || "미지정";
+      const company = c.insurance_company && companyNames.includes(c.insurance_company) ? c.insurance_company : UNMATCHED;
       const day = Number(c.contract_date!.slice(8, 10));
       const week = weekOfMonth(day);
       const val = (c[metric] as number | null) || 0;
@@ -61,21 +120,27 @@ export default function DashboardPage() {
     }
 
     const rows = Array.from(byCompany.entries())
+      .filter(([company, weeks]) => companyNames.includes(company) || weeks.some((v) => v !== 0))
       .map(([company, weeks]) => ({ company, weeks, total: weeks.reduce((a, b) => a + b, 0) }))
-      .sort((a, b) => b.total - a.total);
+      .sort((a, b) => {
+        if (a.company === UNMATCHED) return 1;
+        if (b.company === UNMATCHED) return -1;
+        return companyNames.indexOf(a.company) - companyNames.indexOf(b.company);
+      });
 
     const weekTotals = new Array(weekCount).fill(0);
     for (const r of rows) r.weeks.forEach((v, i) => (weekTotals[i] += v));
     const grandTotal = weekTotals.reduce((a, b) => a + b, 0);
 
     return { weekCount, rows, weekTotals, grandTotal };
-  }, [contracts, month, metric]);
+  }, [contracts, month, metric, companyNames]);
 
   const monthly = useMemo(() => {
     const inYear = contracts.filter((c) => c.contract_date && c.contract_date.startsWith(String(year)));
     const byCompany = new Map<string, number[]>();
+    for (const name of companyNames) byCompany.set(name, new Array(12).fill(0));
     for (const c of inYear) {
-      const company = c.insurance_company || "미지정";
+      const company = c.insurance_company && companyNames.includes(c.insurance_company) ? c.insurance_company : UNMATCHED;
       const mo = Number(c.contract_date!.slice(5, 7));
       const val = (c[metric] as number | null) || 0;
       if (!byCompany.has(company)) byCompany.set(company, new Array(12).fill(0));
@@ -83,22 +148,27 @@ export default function DashboardPage() {
     }
 
     const rows = Array.from(byCompany.entries())
+      .filter(([company, months]) => companyNames.includes(company) || months.some((v) => v !== 0))
       .map(([company, months]) => ({ company, months, total: months.reduce((a, b) => a + b, 0) }))
-      .sort((a, b) => b.total - a.total);
+      .sort((a, b) => {
+        if (a.company === UNMATCHED) return 1;
+        if (b.company === UNMATCHED) return -1;
+        return companyNames.indexOf(a.company) - companyNames.indexOf(b.company);
+      });
 
     const monthTotals = new Array(12).fill(0);
     for (const r of rows) r.months.forEach((v, i) => (monthTotals[i] += v));
     const grandTotal = monthTotals.reduce((a, b) => a + b, 0);
 
     return { rows, monthTotals, grandTotal };
-  }, [contracts, year, metric]);
+  }, [contracts, year, metric, companyNames]);
 
   if (loading) return <div className="p-6 text-foreground/60">불러오는 중...</div>;
   if (error) return <div className="p-6 text-red-500">{error}</div>;
 
   return (
     <div className="space-y-8 p-4 sm:p-6">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-foreground/60">기준 금액:</span>
         {(["converted_premium", "monthly_premium"] as Metric[]).map((m) => (
           <button
@@ -111,6 +181,12 @@ export default function DashboardPage() {
             {m === "converted_premium" ? "환산보험료" : "월납보험료"}
           </button>
         ))}
+        <button
+          onClick={() => setShowManager(true)}
+          className="ml-auto rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-foreground hover:bg-primary-light"
+        >
+          보험사 관리
+        </button>
       </div>
 
       <section>
@@ -232,6 +308,39 @@ export default function DashboardPage() {
           </table>
         </div>
       </section>
+
+      {showManager && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowManager(false)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl border border-border bg-surface p-6 shadow-xl"
+          >
+            <h3 className="mb-4 text-lg font-bold text-primary">보험사 관리</h3>
+            <ul className="mb-4 max-h-80 space-y-2 overflow-y-auto">
+              {companies.length === 0 && <li className="text-sm text-foreground/40">등록된 보험사가 없습니다.</li>}
+              {companies.map((c) => (
+                <li key={c.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+                  <span className="text-foreground">{c.name}</span>
+                  <button onClick={() => handleRemoveCompany(c.id)} className="text-red-500 hover:underline">
+                    제거
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <form onSubmit={handleAddCompany} className="flex gap-2">
+              <input
+                value={newCompanyName}
+                onChange={(e) => setNewCompanyName(e.target.value)}
+                placeholder="새 보험사 이름"
+                className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary"
+              />
+              <button type="submit" className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary-hover">
+                추가
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

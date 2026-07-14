@@ -27,6 +27,20 @@ export type Folder = {
   sort_order: number;
 };
 
+export type DashboardCompany = {
+  id: string;
+  name: string;
+  sort_order: number;
+};
+
+export type AwardFile = {
+  id: string;
+  month: string;
+  file_name: string;
+  storage_path: string;
+  created_at?: string;
+};
+
 export type FixedFieldDef = {
   key: keyof Omit<Contract, "id" | "extra" | "created_at" | "folder_id">;
   label: string;

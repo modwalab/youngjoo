@@ -4,9 +4,10 @@ import { useState } from "react";
 import Login from "./_components/Login";
 import ContractsPage from "./_components/ContractsPage";
 import DashboardPage from "./_components/DashboardPage";
+import AwardsPage from "./_components/AwardsPage";
 import SettingsPage from "./_components/SettingsPage";
 
-type Tab = "contracts" | "dashboard" | "settings";
+type Tab = "contracts" | "dashboard" | "awards" | "settings";
 
 export default function Home() {
   const [authed, setAuthed] = useState(
@@ -24,6 +25,7 @@ export default function Home() {
   const tabs: { key: Tab; label: string }[] = [
     { key: "contracts", label: "계약관리" },
     { key: "dashboard", label: "현황" },
+    { key: "awards", label: "시상" },
     { key: "settings", label: "설정" },
   ];
 
@@ -51,6 +53,7 @@ export default function Home() {
       <main className="flex-1">
         {tab === "contracts" && <ContractsPage />}
         {tab === "dashboard" && <DashboardPage />}
+        {tab === "awards" && <AwardsPage />}
         {tab === "settings" && <SettingsPage />}
       </main>
     </div>

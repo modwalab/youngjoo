@@ -302,6 +302,42 @@ export default function ContractsPage() {
     if (selectedFolder === id) setSelectedFolder(null);
   }
 
+  async function handleRenameFolder(f: Folder) {
+    if (!supabase) return;
+    const name = prompt("폴더 이름 수정", f.name);
+    if (!name || !name.trim() || name.trim() === f.name) return;
+    const { error } = await supabase.from("cm_folders").update({ name: name.trim() }).eq("id", f.id);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    setFolders((prev) => prev.map((x) => (x.id === f.id ? { ...x, name: name.trim() } : x)));
+  }
+
+  async function handleMoveFolder(index: number, direction: -1 | 1) {
+    if (!supabase) return;
+    const target = index + direction;
+    if (target < 0 || target >= folders.length) return;
+    const a = folders[index];
+    const b = folders[target];
+    const [{ error: errA }, { error: errB }] = await Promise.all([
+      supabase.from("cm_folders").update({ sort_order: b.sort_order }).eq("id", a.id),
+      supabase.from("cm_folders").update({ sort_order: a.sort_order }).eq("id", b.id),
+    ]);
+    if (errA || errB) {
+      alert((errA || errB)?.message);
+      return;
+    }
+    setFolders((prev) => {
+      const next = [...prev];
+      [next[index], next[target]] = [
+        { ...next[target], sort_order: a.sort_order },
+        { ...next[index], sort_order: b.sort_order },
+      ];
+      return next;
+    });
+  }
+
   async function handleMoveSelected() {
     if (!supabase || selectedIds.size === 0) return;
     const targetId = moveTarget === UNASSIGNED || moveTarget === "" ? null : moveTarget;
@@ -351,23 +387,50 @@ export default function ContractsPage() {
               미분류
             </button>
           </li>
-          {folders.map((f) => (
+          {folders.map((f, i) => (
             <li key={f.id} className="group flex items-center">
               <button
                 onClick={() => setSelectedFolder(f.id)}
+                onDoubleClick={() => handleRenameFolder(f)}
                 className={`min-w-0 flex-1 truncate rounded-lg px-2.5 py-1.5 text-left text-sm ${
                   selectedFolder === f.id ? "bg-primary text-primary-foreground font-semibold" : "text-foreground hover:bg-primary-light"
                 }`}
+                title="더블클릭하면 이름 수정"
               >
                 {f.name}
               </button>
-              <button
-                onClick={() => handleDeleteFolder(f.id)}
-                className="ml-1 hidden shrink-0 px-1 text-xs text-foreground/30 hover:text-red-500 group-hover:inline"
-                title="폴더 삭제"
-              >
-                ✕
-              </button>
+              <div className="ml-0.5 hidden shrink-0 items-center group-hover:flex">
+                <button
+                  onClick={() => handleMoveFolder(i, -1)}
+                  disabled={i === 0}
+                  className="px-0.5 text-xs text-foreground/40 hover:text-primary disabled:opacity-20"
+                  title="위로 이동"
+                >
+                  ▲
+                </button>
+                <button
+                  onClick={() => handleMoveFolder(i, 1)}
+                  disabled={i === folders.length - 1}
+                  className="px-0.5 text-xs text-foreground/40 hover:text-primary disabled:opacity-20"
+                  title="아래로 이동"
+                >
+                  ▼
+                </button>
+                <button
+                  onClick={() => handleRenameFolder(f)}
+                  className="px-0.5 text-xs text-foreground/40 hover:text-primary"
+                  title="이름 수정"
+                >
+                  ✎
+                </button>
+                <button
+                  onClick={() => handleDeleteFolder(f.id)}
+                  className="px-0.5 text-xs text-foreground/40 hover:text-red-500"
+                  title="폴더 삭제"
+                >
+                  ✕
+                </button>
+              </div>
             </li>
           ))}
         </ul>

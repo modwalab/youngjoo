@@ -36,14 +36,18 @@ const SORTABLE_KEYS = new Set([
   "insurance_company",
 ]);
 
+const NUMERIC_KEYS = new Set(["monthly_premium", "converted_premium"]);
+
 type SortDir = "asc" | "desc";
 
 function compareValues(a: Contract, b: Contract, key: keyof Contract) {
   const av = a[key];
   const bv = b[key];
-  if (av === null || av === undefined) return bv === null || bv === undefined ? 0 : 1;
-  if (bv === null || bv === undefined) return -1;
-  if (typeof av === "number" && typeof bv === "number") return av - bv;
+  if (av === null || av === undefined || av === "") return bv === null || bv === undefined || bv === "" ? 0 : 1;
+  if (bv === null || bv === undefined || bv === "") return -1;
+  if (NUMERIC_KEYS.has(key) || (typeof av === "number" && typeof bv === "number")) {
+    return Number(av) - Number(bv);
+  }
   return String(av).localeCompare(String(bv), "ko");
 }
 

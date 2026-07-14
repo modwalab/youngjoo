@@ -123,17 +123,17 @@ export default function DashboardPage() {
             className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary"
           />
         </div>
-        <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+        <div className="overflow-x-auto rounded-xl border border-primary/20 bg-panel shadow-sm">
           <table className="w-full min-w-[500px] text-sm">
             <thead>
-              <tr className="border-b border-border bg-primary-light/60 text-left text-foreground/70">
-                <th className="px-3 py-2 font-medium">보험사</th>
+              <tr className="bg-primary text-left text-primary-foreground">
+                <th className="px-3 py-2.5 font-semibold">보험사</th>
                 {Array.from({ length: weekly.weekCount }, (_, i) => (
-                  <th key={i} className="whitespace-nowrap px-3 py-2 text-right font-medium">
+                  <th key={i} className="whitespace-nowrap px-3 py-2.5 text-right font-semibold">
                     {i + 1}주차
                   </th>
                 ))}
-                <th className="whitespace-nowrap px-3 py-2 text-right font-medium">합계</th>
+                <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold">합계</th>
               </tr>
             </thead>
             <tbody>
@@ -145,7 +145,7 @@ export default function DashboardPage() {
                 </tr>
               )}
               {weekly.rows.map((r) => (
-                <tr key={r.company} className="border-b border-border last:border-0 hover:bg-primary-light/30">
+                <tr key={r.company} className="border-b border-primary/10 bg-surface last:border-0 hover:bg-primary-light/50">
                   <td className="whitespace-nowrap px-3 py-2 text-foreground">{r.company}</td>
                   {r.weeks.map((v, i) => (
                     <td key={i} className="whitespace-nowrap px-3 py-2 text-right text-foreground">
@@ -158,14 +158,14 @@ export default function DashboardPage() {
             </tbody>
             {weekly.rows.length > 0 && (
               <tfoot>
-                <tr className="border-t border-border bg-primary-light/40 font-medium">
+                <tr className="border-t-2 border-accent bg-primary-light/60 font-semibold">
                   <td className="px-3 py-2 text-foreground">합계</td>
                   {weekly.weekTotals.map((v, i) => (
                     <td key={i} className="whitespace-nowrap px-3 py-2 text-right text-foreground">
                       {formatWon(v)}
                     </td>
                   ))}
-                  <td className="whitespace-nowrap px-3 py-2 text-right text-primary">{formatWon(weekly.grandTotal)}</td>
+                  <td className="whitespace-nowrap rounded-br-xl bg-accent px-3 py-2 text-right text-accent-foreground">{formatWon(weekly.grandTotal)}</td>
                 </tr>
               </tfoot>
             )}
@@ -183,17 +183,17 @@ export default function DashboardPage() {
             className="w-24 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary"
           />
         </div>
-        <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+        <div className="overflow-x-auto rounded-xl border border-primary/20 bg-panel shadow-sm">
           <table className="w-full min-w-[1100px] text-sm">
             <thead>
-              <tr className="border-b border-border bg-primary-light/60 text-left text-foreground/70">
-                <th className="px-3 py-2 font-medium">보험사</th>
+              <tr className="bg-primary text-left text-primary-foreground">
+                <th className="px-3 py-2.5 font-semibold">보험사</th>
                 {Array.from({ length: 12 }, (_, i) => (
-                  <th key={i} className="whitespace-nowrap px-3 py-2 text-right font-medium">
+                  <th key={i} className="whitespace-nowrap px-3 py-2.5 text-right font-semibold">
                     {i + 1}월
                   </th>
                 ))}
-                <th className="whitespace-nowrap px-3 py-2 text-right font-medium">합계</th>
+                <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold">합계</th>
               </tr>
             </thead>
             <tbody>
@@ -205,7 +205,7 @@ export default function DashboardPage() {
                 </tr>
               )}
               {monthly.rows.map((r) => (
-                <tr key={r.company} className="border-b border-border last:border-0 hover:bg-primary-light/30">
+                <tr key={r.company} className="border-b border-primary/10 bg-surface last:border-0 hover:bg-primary-light/50">
                   <td className="whitespace-nowrap px-3 py-2 text-foreground">{r.company}</td>
                   {r.months.map((v, i) => (
                     <td key={i} className="whitespace-nowrap px-3 py-2 text-right text-foreground">
@@ -218,14 +218,14 @@ export default function DashboardPage() {
             </tbody>
             {monthly.rows.length > 0 && (
               <tfoot>
-                <tr className="border-t border-border bg-primary-light/40 font-medium">
+                <tr className="border-t-2 border-accent bg-primary-light/60 font-semibold">
                   <td className="px-3 py-2 text-foreground">합계</td>
                   {monthly.monthTotals.map((v, i) => (
                     <td key={i} className="whitespace-nowrap px-3 py-2 text-right text-foreground">
                       {formatWon(v)}
                     </td>
                   ))}
-                  <td className="whitespace-nowrap px-3 py-2 text-right text-primary">{formatWon(monthly.grandTotal)}</td>
+                  <td className="whitespace-nowrap rounded-br-xl bg-accent px-3 py-2 text-right text-accent-foreground">{formatWon(monthly.grandTotal)}</td>
                 </tr>
               </tfoot>
             )}

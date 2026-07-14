@@ -274,34 +274,34 @@ export default function ContractsPage() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+      <div className="overflow-x-auto rounded-xl border border-primary/20 bg-panel shadow-sm">
         <table className="w-full min-w-[900px] text-sm">
           <thead>
-            <tr className="border-b border-border bg-primary-light/60 text-left text-foreground/70">
+            <tr className="bg-primary text-left text-primary-foreground">
               {FIXED_FIELDS.map((f) =>
                 SORTABLE_KEYS.has(f.key) ? (
                   <th
                     key={f.key}
                     onClick={() => toggleSort(f.key)}
-                    className="cursor-pointer select-none whitespace-nowrap px-3 py-2 font-medium hover:text-foreground"
+                    className="cursor-pointer select-none whitespace-nowrap px-3 py-2.5 font-semibold hover:bg-white/10"
                   >
                     {f.label}
-                    <span className="ml-0.5 inline-block w-3 text-primary">
+                    <span className="ml-0.5 inline-block w-3 text-accent">
                       {sortKey === f.key ? (sortDir === "asc" ? "▲" : "▼") : ""}
                     </span>
                   </th>
                 ) : (
-                  <th key={f.key} className="whitespace-nowrap px-3 py-2 font-medium">
+                  <th key={f.key} className="whitespace-nowrap px-3 py-2.5 font-semibold">
                     {f.label}
                   </th>
                 )
               )}
               {customFields.map((f) => (
-                <th key={f.id} className="whitespace-nowrap px-3 py-2 font-medium">
+                <th key={f.id} className="whitespace-nowrap px-3 py-2.5 font-semibold">
                   {f.label}
                 </th>
               ))}
-              <th className="px-3 py-2"></th>
+              <th className="px-3 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
@@ -313,7 +313,7 @@ export default function ContractsPage() {
               </tr>
             )}
             {sorted.map((c) => (
-              <tr key={c.id} className="border-b border-border last:border-0 hover:bg-primary-light/30">
+              <tr key={c.id} className="border-b border-primary/10 bg-surface last:border-0 hover:bg-primary-light/50">
                 {FIXED_FIELDS.map((f) => (
                   <td key={f.key} className="whitespace-nowrap px-3 py-2 text-foreground">
                     {f.type === "number" ? formatNumber(c[f.key] as number | null) : (c[f.key] as string) || ""}
